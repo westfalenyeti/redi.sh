@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#set -x
 REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
 REDIS_PORT="${REDIS_PORT:-6379}"
 REDIS_DB="${REDIS_DB:-0}"
@@ -108,6 +108,11 @@ function redis_set_var() {
 	printf %b "*3\r\n\$3\r\nSET\r\n\$${#REDIS_VAR}\r\n$REDIS_VAR\r\n\$${#REDIS_VAR_VAL}\r\n$REDIS_VAR_VAL\r\n"
 }
 
+function redis_del_var() {
+	typeset REDIS_VAR="$@"
+	printf %b "*2\r\n\$3\r\nDEL\r\n\$${#REDIS_VAR}\r\n$REDIS_VAR\r\n"
+}
+
 function redis_get_array() {
 	typeset REDIS_ARRAY="$1"
 	RANGE_LOW=$(echo $2 | cut -f1 -d,)
@@ -126,7 +131,7 @@ function redis_set_array() {
 	done
 }
 
-while getopts g:s:r:P:H:p:d:ha opt; do
+while getopts g:s:d:r:P:H:p:D:ha opt; do
 	case $opt in
 		p)
 			REDIS_PW=${OPTARG}
@@ -140,6 +145,9 @@ while getopts g:s:r:P:H:p:d:ha opt; do
 		g)
 			REDIS_GET=${OPTARG}
 			;;
+		d)
+			REDIS_DEL=${OPTARG}
+			;;
 		a)
 			REDIS_ARRAY=1
 			;;
@@ -149,20 +157,20 @@ while getopts g:s:r:P:H:p:d:ha opt; do
 		s)
 			REDIS_SET=${OPTARG}
 			;;
-    d)
+		D)
 			REDIS_DB=${OPTARG}
 			;;
 		h)
 			echo
 			echo USAGE:
-			echo "	$0 [-a] [-r <range>] [-s <var>] [-g <var>] [-p <password>] [-d <database_number>] [-H <hostname>] [-P <port>]"
+			echo "	$0 [-H <hostname>] [-P <port>] [-p <password>] [-D <database_number>] [-a] [-r <range>] [-s <var>] [-g <var>] [-d <var>]"
 			echo
 			exit 1
 			;;
 	esac
 done
 
-if [[ -z $REDIS_GET ]] && [[ -z $REDIS_SET ]]; then
+if [[ -z $REDIS_GET ]] && [[ -z $REDIS_SET ]] && [[ -z $REDIS_DEL ]]; then
 	echo "You must either GET(-g) or SET(-s)" >&2
 	exit 1
 fi
@@ -176,6 +184,15 @@ if [[ ! -z $REDIS_PW ]]; then
 	redis_compose_cmd "$REDIS_PW" >&$FD
     redis_read $FD 1>/dev/null 2>&1
 fi
+
+if [[ ! -z $REDIS_DEL ]]; then
+	redis_del_var "$REDIS_DEL" >&$FD
+	redis_read $FD 1>/dev/null 2>&1
+#	redis_read $FD
+#	exec {FD}>&-
+	exit 0
+fi
+
 
 if [[ ! -z $REDIS_GET ]]; then
 	if [[ $REDIS_ARRAY -eq 1 ]]; then
